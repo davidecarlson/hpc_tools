@@ -23,11 +23,12 @@ parser.add_argument('--full', required=False,action=argparse.BooleanOptionalActi
 parser.add_argument('--recent', required=False, action='store', help='Print the N most recently loaded modules', type=int, default=10)
 parser.add_argument('--top', required=False, action='store', help='Print top N most frequently loaded modules', type=int, default=10)
 parser.add_argument('--user', required=False, action='store', help='Get general useage info for specific user', type=str)
+parser.add_argument('--no_singletons', required=False,action=argparse.BooleanOptionalAction, help='Don\'t include modules that were only loaded a single time in the general output')
 parser.add_argument('--start', required=False, action='store', help='Get modules loaded after specific date (format: YYYY-DD-MM)',
     type=datetime.date.fromisoformat)
 parser.add_argument('--end', required=False, action='store', help='Get modules loaded up to (inclusive) specific date (format: YYYY-DD-MM). Default is today\'s date',
     type=datetime.date.fromisoformat, default = date.today())
-parser.add_argument('--prefix_all', required=False,action=argparse.BooleanOptionalAction,help='Get information on all modules that match the module prefix')
+parser.add_argument('--prefix_all', required=False,action=argparse.BooleanOptionalAction,help='Get information on all modules that match the module name prefix')
 
 args=parser.parse_args()
 
@@ -37,6 +38,7 @@ prefix = args.prefix_all
 topN = args.top
 recentN = args.recent
 user = args.user
+singletons = args.no_singletons
 start = args.start
 end = args.end
 
@@ -175,11 +177,18 @@ def count_usage(df, module):
 
 def genstat(df, top=topN):
     # get basic summary stats regarding module usage
-    total_loaded = df['modules'].nunique()
 
-    total_users = df['users'].nunique()
-    
-    mod_count = df.groupby(['modules'],as_index=False).count().sort_values(['dates'], ascending=False).rename(columns={'users': '# of times loaded'}).drop(['dates', 'nodes'], axis=1)
+    if singletons != None:
+        filtered = df[df.groupby("modules")['modules'].transform('size') > 1]
+
+        total_loaded = filtered['modules'].nunique()
+        total_users = filtered['users'].nunique()
+
+        mod_count = filtered.groupby(['modules'],as_index=False).count().sort_values(['dates'], ascending=False).rename(columns={'users': '# of times loaded'}).drop(['dates', 'nodes'], axis=1)
+    else:
+        total_loaded = df['modules'].nunique()
+        total_users = df['users'].nunique()
+        mod_count = df.groupby(['modules'],as_index=False).count().sort_values(['dates'], ascending=False).rename(columns={'users': '# of times loaded'}).drop(['dates', 'nodes'], axis=1)
     
     print()
     print('##########################################################')
