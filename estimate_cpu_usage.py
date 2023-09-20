@@ -4,6 +4,7 @@
 
 import os
 import subprocess
+import socket
 import pandas as pd
 import re
 from datetime import date
@@ -149,7 +150,13 @@ def write_results(results_df):
     # write output to a date-stamped TSV file
     output = '~/slurm_job_stats'
     today = get_date()
-    results_df.to_csv(f'{output}/{today}_job_stats.txt',sep='\t',index=False, float_format='%.3f')
+    # get hostname so we can write out separate results for SW2 and SW3
+    host = socket.gethostname()
+    if 'dg' in host or  'milan' in host or 'xeonmax' in host:
+        sw_version = 'seawulf3'
+    elif 'login' in host or 'cn' in host:
+        sw_version = 'seawulf2'
+    results_df.to_csv(f'{output}/{today}_{sw_version}_job_stats.txt',sep='\t',index=False, float_format='%.3f')
 
 
 if __name__=='__main__':
