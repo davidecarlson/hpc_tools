@@ -65,6 +65,8 @@ for i in range(0, len(node_list)):
             columns =['time','power']
             df=pd.read_csv(file_to_open,sep=',',header=None,names=columns)
             times=pd.to_datetime(df['time'],format='%H:%M:%S').dt.time
+            #Replace any error messages with NaN so the averaging can work
+            df['power'] = pd.to_numeric(df['power'], errors='coerce')
             #excluded first 2 and last data point
             #power_sum = df.loc[(df['time'] > time_start) & (df['time'] < time_end), 'power'].mean()
             job_df = df.loc[(df['time'] > time_start) & (df['time'] < time_end)].iloc[2:-1] 
