@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 
 # read in module use data from sys logs, calculate and return user requested information
-
 import argparse
 import sys
 import pandas as pd
 import datefinder
 import datetime
 from datetime import date
+from datetime import datetime as dt
 from itertools import chain
 from tabulate import tabulate
 
@@ -113,6 +113,7 @@ def read_file(file):
             if "unload" not in entry
             if entry.startswith(("Feb", "Jan"))
         ]
+        
         loaded_new = [
             entry
             for entry in data
@@ -148,14 +149,24 @@ def check_mod(mod_name):
 
 
 def reformat_data_old(data):
-    dates = [" ".join(entry.split()[0:3]) for entry in data]
+    # Setting up dictionaries
+    dates = []
+    nodes = []
+    users = []
+    loaded_modules = []
+    for entry in data:
+        dates.append(" ".join(entry.split()[0:3]))
+        nodes.append(entry.split()[3])
+        users.append(entry.split(":")[4].split(",")[0].strip().replace('"', ""))
+        loaded_modules.append( entry.split("load ")[-1]
+        .replace("}", "")
+        .replace('"', "")
+        .replace("{", "")
+        .strip()
+        .replace(" ", ","))
+    """dates = [" ".join(entry.split()[0:3]) for entry in data]
     # use datefinder to get properly formated date and time
-    matches = [datefinder.find_dates(date) for date in dates]
-
-    corr_dates = [
-        days.strftime("%Y-%m-%d %H:%M:%S") for days in chain.from_iterable(matches)
-    ]
-
+    
     nodes = [entry.split()[3] for entry in data]
     users = [
         entry.split(":")[4].split(",")[0].strip().replace('"', "") for entry in data
@@ -169,6 +180,11 @@ def reformat_data_old(data):
         .strip()
         .replace(" ", ",")
         for entry in data
+    ]"""
+    matches = [datefinder.find_dates(date) for date in dates]
+
+    corr_dates = [
+        days.strftime("%Y-%m-%d %H:%M:%S") for days in chain.from_iterable(matches)
     ]
 
     module_df = pd.DataFrame(
@@ -179,30 +195,51 @@ def reformat_data_old(data):
 
 
 def reformat_data_new(data):
-    dates = [entry.split()[0] for entry in data]
-
-    # use datefinder to get properly formated date and time
-    matches = [datefinder.find_dates(date) for date in dates]
-
-    corr_dates = [
-        days.strftime("%Y-%m-%d %H:%M:%S") for days in chain.from_iterable(matches)
-    ]
-
-    nodes = [entry.split()[1] for entry in data]
-
-    users = [
-        entry.split(":")[5].split(",")[0].strip().replace('"', "") for entry in data
-    ]
-
-    loaded_modules = [
-        entry.split("load ")[-1]
+    #dates = []
+    #matches = []
+    corr_dates = []
+    nodes = []
+    users = []
+    loaded_modules = []
+    for entry in data:
+        date = entry.split()[0]
+        matched = date[:10] + " " + date[11:19]
+        #match = dt.strptime(date, "%Y-%m-%dT%H:%M:%S%z")
+        #corr_dates.append(match.strftime("%Y-%m-%d %H:%M:%S"))
+        corr_dates.append(matched)
+        nodes.append(entry.split()[1])
+        users.append(entry.split(":")[5].split(",")[0].strip().replace('"', ""))
+        loaded_modules.append(entry.split("load ")[-1]
         .replace("}", "")
         .replace('"', "")
         .replace("{", "")
         .strip()
-        .replace(" ", ",")
-        for entry in data
-    ]
+        .replace(" ", ","))
+
+    #dates = [entry.split()[0] for entry in data]
+
+    # use datefinder to get properly formated date and time
+    #matches = [datefinder.find_dates(date) for date in dates]
+
+    #corr_dates = [
+    #    days.strftime("%Y-%m-%d %H:%M:%S") for days in chain.from_iterable(matches)
+    #]
+
+    #nodes = [entry.split()[1] for entry in data]
+
+    #users = [
+    #    entry.split(":")[5].split(",")[0].strip().replace('"', "") for entry in data
+    #]
+
+    #loaded_modules = [
+    #    entry.split("load ")[-1]
+    #    .replace("}", "")
+    #    .replace('"', "")
+    #    .replace("{", "")
+    #    .strip()
+    #    .replace(" ", ",")
+    #    for entry in data
+    #]
 
     module_df = pd.DataFrame(
         {"dates": corr_dates, "nodes": nodes, "users": users, "modules": loaded_modules}
