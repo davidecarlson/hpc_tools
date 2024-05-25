@@ -1,206 +1,118 @@
 #!/usr/bin/env python
-
-# calculate the CPU usage for each running Slurm job
+# -*- coding: utf-8 -*-
 
 import subprocess
-import socket
-import pandas as pd
 import re
-from datetime import date
+import pandas as pd
 from tabulate import tabulate
+import argparse
+
+parser = argparse.ArgumentParser(description="Calculate CPU and Memory usage for each node running a Slurm job")
+parser.add_argument("-u", "--user", help="Username to search for", required=False)
+parser.add_argument("-l", "--low", help="Only report nodes with %% CPU usage lower than this value", required=False)
+parser.add_argument("-e", "--high", help="Only report nodes with %% CPU usage higher than this value", required=False)
+parser.add_argument("-n", "--node", help="Only report usage on this node", required=False)
+parser.add_argument("-j", "--job", help="Only report usage for this job ID", required=False)
+args = parser.parse_args()
 
 
-def findval(str):
-    # take a range of values (e.g., 1-10) and return a list of all the values in that range
-    # from https://stackoverflow.com/questions/20662764/expand-a-string-describing-a-set-of-numbers-noted-as-a-list-of-numbers-and-or-ra
-    val = []
-    for x in str.split(","):
-        # print(x)
-        if "-" in x:
-            lnum, rnum = x.split("-")
-            lnum, rnum = int(lnum), int(rnum)
-            val.extend(range(lnum, rnum + 1))
+def node_stats():
+    # find the status of all allocated nodes except for those running A100 gpu jobs and shared jobs
+    sinfo_cmd="sinfo -a --Node -o '%.10N %8O %c %.10e %.10m  %.5a %.6t %12E %G'|uniq|grep alloc|grep -Ev 'a100|shared|rn' | awk '{print $1,$2,$3,$4,$5}'"
+    sinfo = subprocess.getoutput(sinfo_cmd)
+    sinfo = sinfo.split("\n")
+    sinfo = [x.split() for x in sinfo]
+    sinfo_stats = pd.DataFrame(sinfo, columns=["Node", "CPU load", "CPUs available", "Memory available (MB)", "Total Memory (MB)"])
+    sinfo_stats["% CPUs used"] = sinfo_stats["CPU load"].astype(float) / sinfo_stats["CPUs available"].astype(float) * 100
+    sinfo_stats["% Memory used"] = (sinfo_stats["Total Memory (MB)"].astype(float) - sinfo_stats["Memory available (MB)"].astype(float)) /sinfo_stats["Total Memory (MB)"].astype(float)  * 100
+    sinfo_stats = sinfo_stats[["Node", "CPU load", "% CPUs used", "% Memory used"]]
+    return(sinfo_stats)
+
+def expand_nodelist(nodelist):
+    """
+    Expand the nodelist to handle ranges and comma-separated lists.
+    Example: "dg[035-036,042]" -> ["dg035", "dg036", "dg042"]
+    """
+    pattern = re.compile(r'(\D+)\[(.+)\]')
+    match = pattern.match(nodelist)
+    
+    if not match:
+        return [nodelist]
+    
+    prefix, ranges = match.groups()
+    nodes = []
+    
+    for part in ranges.split(','):
+        if '-' in part:
+            start, end = part.split('-')
+            nodes.extend([f"{prefix}{str(i).zfill(len(start))}" for i in range(int(start), int(end) + 1)])
         else:
-            lnum = int(x)
-            val.append(lnum)
+            nodes.append(f"{prefix}{part}")
+    return(nodes)
 
-    return val
+def get_job_ids_by_node(node_info):
+    # Join the list of nodes into a comma-separated string
+    nodelist= ",".join([node for node in node_info["Node"]])
+    #print(nodelist)
+    
+    # Run the squeue command with the specified nodes and capture the output
+    result = subprocess.run(['squeue', '-a', '-w', nodelist, '-o', '%.18i %.6D %R'], stdout=subprocess.PIPE)
+    
+    # Decode the output to string
+    output = result.stdout.decode('utf-8')
+    
+    # Split the output into lines
+    lines = output.split('\n')
+    
+    # Create a list to store job IDs and corresponding nodes
+    job_node_pairs = []
+    
+    # Process each line of the squeue output
+    for line in lines[1:]:
+        if line:
+            parts = line.split()
+            job_id = parts[0]
+            nodelist = parts[-1]
+            
+            # Expand the nodelist
+            expanded_nodes = expand_nodelist(nodelist)
+            
+            # Add job ID and each node to the list of pairs
+            for node in node_info["Node"]:
+                if node in expanded_nodes:
+                    job_node_pairs.append((job_id, node))
+    df = pd.DataFrame(job_node_pairs, columns=['Job ID', 'Node'])
+    combined_df = node_info.merge(df, on='Node', how='outer')
+    print(len(combined_df.index))
+    combined_df.to_csv('combined_df.csv')
+    return(combined_df)
 
-
-def split_nodes(lst):
-    if "sn[" in lst:
-        stripped = lst.strip("sn[").strip("]")
-        numlist = findval(stripped)
-        nodelist = ["sn" + str(num).zfill(3) for num in numlist]
-    elif "cn[" in lst:
-        stripped = lst.strip("cn[").strip("]")
-        numlist = findval(stripped)
-        nodelist = ["cn" + str(num).zfill(3) for num in numlist]
-    elif "dn[" in lst:
-        stripped = lst.strip("dn[").strip("]")
-        numlist = findval(stripped)
-        nodelist = ["dn" + str(num).zfill(3) for num in numlist]
-    elif "dg[" in lst:
-        stripped = lst.strip("dg[").strip("]")
-        numlist = findval(stripped)
-        nodelist = ["dg" + str(num).zfill(3) for num in numlist]
-    elif "xm[" in lst:
-        stripped = lst.strip("xm[").strip("]")
-        numlist = findval(stripped)
-        nodelist = ["xm" + str(num).zfill(3) for num in numlist]
-    else:
-        nodelist = lst
-    # print(nodelist)
-    return nodelist
-
-
-def slurm_jobs():
-    jobs = subprocess.run(
-        ["squeue", "-o", "%.25u %.12A %.25N", "-t", "R", "--noheader"],
-        stdout=subprocess.PIPE,
-        universal_newlines=True,
-    )
-    # jobs = subprocess.run(['squeue', '-u', 'asingal', '-o',  "%.25u %.12A %.25N", '-t', 'R', '--noheader'],
-    #    stdout=subprocess.PIPE, universal_newlines = True)
-
-    results = jobs.stdout.splitlines()
-
-    # convert multiple spaces to a single space
-
-    new_results = [
-        re.sub(" +", " ", result).strip(" ").split(" ") for result in results
-    ]
-    reformatted = [
-        [result[0], result[1], split_nodes(result[2])] for result in new_results
-    ]
-
-    df = pd.DataFrame(reformatted, columns=["User", "Job ID", "Nodelist"])
-
-    # convert df to long format so that there is one row per node (multiple rows for multinode jobs)
-    df2 = df.explode("Nodelist")
-    # remove rows for gpu nodes and rizzo nodes from the df
-    cpu_jobs = df2[~df2["Nodelist"].str.contains("nv|rn|a100")]
-    #cpu_jobs = df2[df2["Nodelist"].str.contains("nv|rn|a100") is False]
-    return cpu_jobs
-
-
-def coreusage(node, user):
-    print(f"Now looking up core usage on node {node}...")
-    # only using first six characters of username because ps aux cuts the rest off
-    command_cpu = f'ssh {node} "ps aux | grep {user[0:7]} | grep -v grep"'
-    ssh_cmd = subprocess.run(
-        command_cpu, capture_output=True, universal_newlines=True, shell=True
-    )
-    results_cpu = ssh_cmd.stdout.splitlines()
-    cpus = [float(result.split()[2]) for result in results_cpu]
-    node_usage = sum(cpus)
-    return node_usage
-
-
-def memusage(node, user):
-    print(f"Now looking up memory usage on {node}...")
-    command_mem = f'ssh {node} "ps -U {user} --no-headers -o rss"'
-    ssh_cmd = subprocess.run(
-        command_mem, capture_output=True, universal_newlines=True, shell=True
-    )
-    results_mem = ssh_cmd.stdout.splitlines()
-    mem = [float(result) for result in results_mem]
-    # get total rss memory usage in Gb
-    total_mem = sum(mem) / 01e06
-    return total_mem
-
-
-def num_cores(node):
-    if "sn" in node:
-        cores = 28
-    elif "cn" in node:
-        cores = 24
-    elif "dn" in node:
-        cores = 40
-    elif "dg" in node:
-        cores = 96
-    elif "a100" in node:
-        cores = 64
-    elif "xm" in node:
-        cores = 96
-    else:
-        cores = "N/A"
-    return cores
-
-
-def get_stats(job_df):
-    # apply the nodeuseage function to each row of the jobs df
-    print(job_df)
-    job_df["Cores Used"] = job_df.apply(
-        lambda x: coreusage(x["Nodelist"], x["User"]), axis=1
-    )
-    job_df["Memory Used (GB)"] = job_df.apply(
-        lambda x: memusage(x["Nodelist"], x["User"]), axis=1
-    )
-    # apply the num_cores function to each row of the jobs ds
-    job_df["Cores available"] = job_df.apply(lambda x: num_cores(x["Nodelist"]), axis=1)
-
-    # use groupby to aggregate stats across multinode jobs and combine the resulting dataframes back together
-    cores_per_job = job_df.groupby(["Job ID"], as_index=False)["Cores Used"].sum()
-    memory_per_job = job_df.groupby(["Job ID"], as_index=False)[
-        "Memory Used (GB)"
-    ].sum()
-    print(memory_per_job)
-    cores_per_job["Cores Used"] = cores_per_job["Cores Used"] / 100
-    cores_avail_per_job = job_df.groupby(["Job ID"], as_index=False)[
-        "Cores available"
-    ].sum()
-    nodes_per_job = job_df.groupby(["Job ID"], as_index=False)["Nodelist"].count()
-    user_per_job = job_df.groupby(["Job ID", "User"], as_index=False).size()
-
-    combined_job_stats = (
-        cores_per_job.merge(nodes_per_job, on="Job ID", how="inner")
-        .merge(user_per_job, on="Job ID", how="inner")
-        .merge(cores_avail_per_job, on="Job ID", how="inner")
-        .merge(memory_per_job, on="Job ID", how="inner")
-    )
-
-    # clean up the dataframe
-    renamed = combined_job_stats.rename({"Nodelist": "Node Count"}, axis=1)
-    print(renamed)
-    renamed["Job efficiency (% total cores)"] = (
-        renamed["Cores Used"] / renamed["Cores available"] * 100
-    )
-    renamed.drop("size", axis=1, inplace=True)
-
-    return renamed
-
-
-def get_date():
-    today = date.today()
-    pretty_date = today.strftime("%b-%d-%Y")
-    return pretty_date
-
-
-def write_results(results_df):
-    # write output to a date-stamped TSV file
-    output = "~/slurm_job_stats"
-    today = get_date()
-    # get hostname so we can write out separate results for SW2 and SW3
-    host = socket.gethostname()
-    if "dg" in host or "milan" in host or "xeonmax" in host:
-        sw_version = "seawulf3"
-    elif "login" in host or "cn" in host:
-        sw_version = "seawulf2"
-    results_df.to_csv(
-        f"{output}/{today}_{sw_version}_job_stats.txt",
-        sep="\t",
-        index=False,
-        float_format="%.3f",
-    )
-
+def slurm_jobs(sinfo_stats):
+    nodelist= ",".join([node for node in sinfo_stats["Node"]])
+    squeue_cmd="squeue -w {node} -o '%10i %22P %16j %12u %.10M %D %N' -ahw " + nodelist
+    jobs = subprocess.getoutput(squeue_cmd)
+    jobs = jobs.split("\n")
+    jobs = [x.split() for x in jobs]
+    jobs = pd.DataFrame(jobs, columns=["Job ID", "Partition", "Job Name", "User","Time", "# nodes", "Job nodelist"])
+    return(jobs)
 
 if __name__ == "__main__":
-    print("Looking up all running Slurm jobs...\n")
-    jobs = slurm_jobs()
-    # job_subset = jobs.head(10)
-    print("Calculating stats for each job...\n")
-    final_results = get_stats(jobs)
-    print("writing final results to tab-separated output file\n")
-    print(tabulate(final_results, headers="keys", tablefmt="psql", showindex=False))
-    write_results(final_results)
+    node_info = node_stats()
+    print(node_info)
+    node_jobid_info = get_job_ids_by_node(node_info)
+    jobs = slurm_jobs(node_info)
+    #print(jobs)
+    if args.user:
+        jobs = jobs[jobs["User"] == args.user]
+    if args.low:
+        node_jobid_info = node_jobid_info[node_jobid_info["% CPUs used"] < float(args.low)]
+    if args.high:
+        node_jobid_info = node_jobid_info[node_jobid_info["% CPUs used"] > float(args.high)]
+    if args.node:
+        node_jobid_info = node_jobid_info[node_jobid_info["Node"] == args.node]
+    if args.job:
+        node_jobid_info = node_jobid_info[node_jobid_info["Job ID"] == args.job]
+    final_data = pd.merge(node_jobid_info, jobs, on="Job ID")
+    #final_data = node_jobid_info.merge(jobs, on='Job ID', how='outer')
+    print(tabulate(final_data, headers="keys", tablefmt="psql", showindex=False))
+
