@@ -8,7 +8,7 @@ from tabulate import tabulate
 import argparse
 
 parser = argparse.ArgumentParser(description="Calculate CPU and Memory usage for each node running a Slurm job")
-parser.add_argument("-u", "--user", help="Username to search for", required=False)
+parser.add_argument("-u", "--user", help="Only report usage for this user", required=False)
 parser.add_argument("-l", "--low", help="Only report nodes with %% CPU usage lower than this value", required=False)
 parser.add_argument("-e", "--high", help="Only report nodes with %% CPU usage higher than this value", required=False)
 parser.add_argument("-n", "--node", help="Only report usage on this node", required=False)
