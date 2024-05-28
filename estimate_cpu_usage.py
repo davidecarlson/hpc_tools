@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/gpfs/software/Anaconda/bin/python
 # -*- coding: utf-8 -*-
 
 import subprocess
