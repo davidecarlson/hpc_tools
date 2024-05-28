@@ -18,7 +18,7 @@ args = parser.parse_args()
 
 def node_stats():
     # find the status of all allocated nodes except for those running A100 gpu jobs and shared jobs
-    sinfo_cmd="/cm/shared/apps/slurm/current/bin/sinfo -a --Node -o '%.10N %8O %c %.10e %.10m  %.5a %.6t %12E %G'|uniq|grep alloc|grep -Ev 'a100|shared|rn' | awk '{print $1,$2,$3,$4,$5}'"
+    sinfo_cmd="/cm/shared/apps/slurm/current/bin/sinfo -a --Node -o '%.10N %8O %c %.10e %.10m  %.5a %.6t %12E %G'|uniq|grep alloc|grep -Ev 'a100|rn|sn-nvda|cn-nvidia' | awk '{print $1,$2,$3,$4,$5}'"
     sinfo = subprocess.getoutput(sinfo_cmd)
     sinfo = sinfo.split("\n")
     sinfo = [x.split() for x in sinfo]
