@@ -83,7 +83,6 @@ def get_job_ids_by_node(node_info):
                     job_node_pairs.append((job_id, node))
     df = pd.DataFrame(job_node_pairs, columns=['Job ID', 'Node'])
     combined_df = node_info.merge(df, on='Node', how='outer')
-    combined_df.to_csv('combined_df.csv')
     return(combined_df)
 
 def slurm_jobs(sinfo_stats):
