@@ -18,7 +18,7 @@ args = parser.parse_args()
 
 def node_stats():
     # find the status of all allocated nodes except for those running A100 gpu jobs and shared jobs
-    sinfo_cmd="sinfo -a --Node -o '%.10N %8O %c %.10e %.10m  %.5a %.6t %12E %G'|uniq|grep alloc|grep -Ev 'a100|shared|rn' | awk '{print $1,$2,$3,$4,$5}'"
+    sinfo_cmd="/cm/shared/apps/slurm/current/bin/sinfo -a --Node -o '%.10N %8O %c %.10e %.10m  %.5a %.6t %12E %G'|uniq|grep alloc|grep -Ev 'a100|shared|rn' | awk '{print $1,$2,$3,$4,$5}'"
     sinfo = subprocess.getoutput(sinfo_cmd)
     sinfo = sinfo.split("\n")
     sinfo = [x.split() for x in sinfo]
@@ -56,7 +56,7 @@ def get_job_ids_by_node(node_info):
     #print(nodelist)
     
     # Run the squeue command with the specified nodes and capture the output
-    result = subprocess.run(['squeue', '-a', '-w', nodelist, '-o', '%.18i %.6D %R'], stdout=subprocess.PIPE)
+    result = subprocess.run(['/cm/shared/apps/slurm/current/bin/squeue', '-a', '-w', nodelist, '-o', '%.18i %.6D %R'], stdout=subprocess.PIPE)
     
     # Decode the output to string
     output = result.stdout.decode('utf-8')
@@ -87,7 +87,7 @@ def get_job_ids_by_node(node_info):
 
 def slurm_jobs(sinfo_stats):
     nodelist= ",".join([node for node in sinfo_stats["Node"]])
-    squeue_cmd="squeue -w {node} -o '%10i %22P %16j %12u %.10M %D %N' -ahw " + nodelist
+    squeue_cmd="/cm/shared/apps/slurm/current/bin/squeue -w {node} -o '%10i %22P %16j %12u %.10M %D %N' -ahw " + nodelist
     jobs = subprocess.getoutput(squeue_cmd)
     jobs = jobs.split("\n")
     jobs = [x.split() for x in jobs]
