@@ -3,17 +3,30 @@
 
 import subprocess
 import re
+import getpass
 import pandas as pd
 from tabulate import tabulate
 import argparse
 
-parser = argparse.ArgumentParser(description="Calculate CPU and Memory usage for each node running a Slurm job")
-parser.add_argument("-u", "--user", help="Only report usage for this user", required=False)
-parser.add_argument("-l", "--low", help="Only report nodes with %% CPU usage lower than this value", required=False)
-parser.add_argument("-e", "--high", help="Only report nodes with %% CPU usage higher than this value", required=False)
-parser.add_argument("-n", "--node", help="Only report usage on this node", required=False)
-parser.add_argument("-j", "--job", help="Only report usage for this job ID", required=False)
-args = parser.parse_args()
+
+
+def get_args():
+
+    parser = argparse.ArgumentParser(description="Calculate CPU and Memory usage for each node running a Slurm job. If no options are specified, the script will report usage for the current user.")
+    parser.add_argument("-a", "--all", help="Report usage for all users", required=False, action = 'store_true')
+    parser.add_argument("-u", "--user", help="Only report usage for this user", required=False, action = 'store')
+    parser.add_argument("-l", "--low", help="Only report nodes with %% CPU usage lower than this value", required=False)
+    parser.add_argument("-e", "--high", help="Only report nodes with %% CPU usage higher than this value", required=False)
+    parser.add_argument("-n", "--node", help="Only report usage on this node", required=False)
+    parser.add_argument("-j", "--job", help="Only report usage for this job ID", required=False)
+    args = parser.parse_args()
+
+    if args.user:
+        username = args.user
+    else:
+        username = getpass.getuser()
+    return(args, username)
+
 
 
 def node_stats():
@@ -95,19 +108,22 @@ def slurm_jobs(sinfo_stats):
     return(jobs)
 
 if __name__ == "__main__":
+    args, username = get_args()
     node_info = node_stats()
     node_jobid_info = get_job_ids_by_node(node_info)
     jobs = slurm_jobs(node_info)
-    if args.user:
-        jobs = jobs[jobs["User"] == args.user]
-    if args.low:
+    if args.all:
+        jobs = jobs
+    elif args.low:
         node_jobid_info = node_jobid_info[node_jobid_info["% CPUs used"] < float(args.low)]
-    if args.high:
+    elif args.high:
         node_jobid_info = node_jobid_info[node_jobid_info["% CPUs used"] > float(args.high)]
-    if args.node:
+    elif args.node:
         node_jobid_info = node_jobid_info[node_jobid_info["Node"] == args.node]
-    if args.job:
+    elif args.job:
         node_jobid_info = node_jobid_info[node_jobid_info["Job ID"] == args.job]
+    else:
+        jobs = jobs[jobs["User"] == username]
     final_data = pd.merge(node_jobid_info, jobs, on="Job ID")
     #final_data = node_jobid_info.merge(jobs, on='Job ID', how='outer')
     print(tabulate(final_data, headers="keys", tablefmt="psql", showindex=False))
