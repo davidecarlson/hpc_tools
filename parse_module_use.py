@@ -113,7 +113,7 @@ def read_file(file):
             if "unload" not in entry
             if entry.startswith(("Feb", "Jan"))
         ]
-        
+
         loaded_new = [
             entry
             for entry in data
@@ -158,12 +158,14 @@ def reformat_data_old(data):
         dates.append(" ".join(entry.split()[0:3]))
         nodes.append(entry.split()[3])
         users.append(entry.split(":")[4].split(",")[0].strip().replace('"', ""))
-        loaded_modules.append( entry.split("load ")[-1]
-        .replace("}", "")
-        .replace('"', "")
-        .replace("{", "")
-        .strip()
-        .replace(" ", ","))
+        loaded_modules.append(
+            entry.split("load ")[-1]
+            .replace("}", "")
+            .replace('"', "")
+            .replace("{", "")
+            .strip()
+            .replace(" ", ",")
+        )
     """dates = [" ".join(entry.split()[0:3]) for entry in data]
     # use datefinder to get properly formated date and time
     
@@ -195,8 +197,8 @@ def reformat_data_old(data):
 
 
 def reformat_data_new(data):
-    #dates = []
-    #matches = []
+    # dates = []
+    # matches = []
     corr_dates = []
     nodes = []
     users = []
@@ -204,34 +206,36 @@ def reformat_data_new(data):
     for entry in data:
         date = entry.split()[0]
         matched = date[:10] + " " + date[11:19]
-        #match = dt.strptime(date, "%Y-%m-%dT%H:%M:%S%z")
-        #corr_dates.append(match.strftime("%Y-%m-%d %H:%M:%S"))
+        # match = dt.strptime(date, "%Y-%m-%dT%H:%M:%S%z")
+        # corr_dates.append(match.strftime("%Y-%m-%d %H:%M:%S"))
         corr_dates.append(matched)
         nodes.append(entry.split()[1])
         users.append(entry.split(":")[5].split(",")[0].strip().replace('"', ""))
-        loaded_modules.append(entry.split("load ")[-1]
-        .replace("}", "")
-        .replace('"', "")
-        .replace("{", "")
-        .strip()
-        .replace(" ", ","))
+        loaded_modules.append(
+            entry.split("load ")[-1]
+            .replace("}", "")
+            .replace('"', "")
+            .replace("{", "")
+            .strip()
+            .replace(" ", ",")
+        )
 
-    #dates = [entry.split()[0] for entry in data]
+    # dates = [entry.split()[0] for entry in data]
 
     # use datefinder to get properly formated date and time
-    #matches = [datefinder.find_dates(date) for date in dates]
+    # matches = [datefinder.find_dates(date) for date in dates]
 
-    #corr_dates = [
+    # corr_dates = [
     #    days.strftime("%Y-%m-%d %H:%M:%S") for days in chain.from_iterable(matches)
-    #]
+    # ]
 
-    #nodes = [entry.split()[1] for entry in data]
+    # nodes = [entry.split()[1] for entry in data]
 
-    #users = [
+    # users = [
     #    entry.split(":")[5].split(",")[0].strip().replace('"', "") for entry in data
-    #]
+    # ]
 
-    #loaded_modules = [
+    # loaded_modules = [
     #    entry.split("load ")[-1]
     #    .replace("}", "")
     #    .replace('"', "")
@@ -239,7 +243,7 @@ def reformat_data_new(data):
     #    .strip()
     #    .replace(" ", ",")
     #    for entry in data
-    #]
+    # ]
 
     module_df = pd.DataFrame(
         {"dates": corr_dates, "nodes": nodes, "users": users, "modules": loaded_modules}
