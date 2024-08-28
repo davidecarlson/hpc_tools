@@ -91,18 +91,23 @@ df['time'] = pd.to_datetime(df['time'], format='%H:%M:%S').dt.time
 #Replace any error messages with NaN so the averaging can work
 df['power'] = pd.to_numeric(df['power'], errors='coerce')
 
-
-#get power data usage for the time when the job was running and exclude first 2 and last data point
-job_df = df.loc[(df['time'] > start_time_only) & (df['time'] < end_time_only)].iloc[2:-1]
-# get the average power consumption over the time period the job was running
-power_sum = job_df['power'].mean()
-print(f'Average power usage while job running: {power_sum:.3f} W')
-
 # job duration
 timedelta = pd.to_datetime(end_time_only,format='%H:%M:%S') - pd.to_datetime(start_time_only,format='%H:%M:%S')
 
 duration =  timedelta.seconds / 60.0 / 60.0
 print(f'Job duration: {duration:.3f} hours')
+
+#get power data usage for the time when the job was running, excluding the first and last 2 minutes unless the job was shorter than 5 minutes
+
+if duration < 0.0833:
+    job_df = df.loc[(df['time'] > start_time_only) & (df['time'] < end_time_only)]
+else:
+    job_df = df.loc[(df['time'] > start_time_only) & (df['time'] < end_time_only)].iloc[2:-1]
+
+print(job_df)
+# get the average power consumption over the time period the job was running
+power_sum = job_df['power'].mean()
+print(f'Average power usage while job running: {power_sum:.3f} W')
 
 energy = power_sum * duration
 print(f'Energy consumption across {args.runs} runs: {energy:.3f} Wh')
