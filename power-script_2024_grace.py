@@ -26,7 +26,7 @@ with open(log_file, 'r') as file:
     lines = file.readlines()
 
 # Regular expressions to find the relevant benchmark, start, and end times
-benchmark_pattern = re.compile(r'Benchmark (\d+):.*-(p|T|t|@) (\d+)')
+benchmark_pattern = re.compile(r'Benchmark (\d+):.*-(p|T|t|@|num_threads) (\d+)')
 start_time_pattern = re.compile(r'Start Time: (.+)')
 end_time_pattern = re.compile(r'End Time: (.+)')
 
@@ -41,7 +41,7 @@ for i, line in enumerate(lines):
     if benchmark_match:
         benchmark_number = benchmark_match.group(1)
         thread_count = int(benchmark_match.group(3))
-        
+
         if thread_count == args.threads:
             # Found the correct thread count, now search for start and end times
             for j in range(i + 1, len(lines)):
@@ -52,7 +52,7 @@ for i, line in enumerate(lines):
                     # parse found_start_time to datetime object
                     #full_datetime = datetime.strptime(found_start_time, "%m-%d-%y %H:%M:%S")
                     #print(full_datetime)
-                
+
                 end_time_match = end_time_pattern.match(lines[j])
                 if end_time_match:
                     found_end_time = end_time_match.group(1).replace('/', '-')
@@ -104,7 +104,7 @@ if duration < 0.0833:
 else:
     job_df = df.loc[(df['time'] > start_time_only) & (df['time'] < end_time_only)].iloc[2:-1]
 
-print(job_df)
+#print(job_df)
 # get the average power consumption over the time period the job was running
 power_sum = job_df['power'].mean()
 print(f'Average power usage while job running: {power_sum:.3f} W')

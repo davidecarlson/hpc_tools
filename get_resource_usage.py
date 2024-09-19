@@ -1,4 +1,4 @@
-#!/gpfs/software/Anaconda/bin/python
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 import subprocess
@@ -48,13 +48,13 @@ def expand_nodelist(nodelist):
     """
     pattern = re.compile(r'(\D+)\[(.+)\]')
     match = pattern.match(nodelist)
-    
+
     if not match:
         return [nodelist]
-    
+
     prefix, ranges = match.groups()
     nodes = []
-    
+
     for part in ranges.split(','):
         if '-' in part:
             start, end = part.split('-')
@@ -67,29 +67,29 @@ def get_job_ids_by_node(node_info):
     # Join the list of nodes into a comma-separated string
     nodelist= ",".join([node for node in node_info["Node"]])
     #print(nodelist)
-    
+
     # Run the squeue command with the specified nodes and capture the output
     result = subprocess.run(['/cm/shared/apps/slurm/current/bin/squeue', '-a', '-w', nodelist, '-o', '%.18i %.6D %R'], stdout=subprocess.PIPE)
-    
+
     # Decode the output to string
     output = result.stdout.decode('utf-8')
-    
+
     # Split the output into lines
     lines = output.split('\n')
-    
+
     # Create a list to store job IDs and corresponding nodes
     job_node_pairs = []
-    
+
     # Process each line of the squeue output
     for line in lines[1:]:
         if line:
             parts = line.split()
             job_id = parts[0]
             nodelist = parts[-1]
-            
+
             # Expand the nodelist
             expanded_nodes = expand_nodelist(nodelist)
-            
+
             # Add job ID and each node to the list of pairs
             for node in node_info["Node"]:
                 if node in expanded_nodes:
